@@ -1,0 +1,5 @@
+.vscode/
+.ipynb_checkpoints/
+node_modules/
+*.npy
+*.tmp

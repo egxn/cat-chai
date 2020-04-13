@@ -1,0 +1,154 @@
+<div>
+  <style>
+    body {
+      align-items: center;
+      font-family: Sans-Serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    canvas {
+      background-color: #FFF;
+      display: block;
+    }
+    button {
+      border: 2px solid #094067;
+      border-radius: 4px;
+      background-color: #3da9fc;
+      color: #FFF;
+      height: 28px;
+      margin-top: 4px; 
+      width: 108px;
+    }
+    #board {
+      align-items: center;
+      background-color: #eff0f3;
+      border: 2px solid #094067;
+      border-radius: 4px;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      padding: 8px;
+    }
+    #captcha {
+      margin: 4px;
+      border: 2px solid #094067;
+      border-radius: 4px;
+      padding:  8px;
+    }
+  </style>
+  <div id="captcha">
+    <input type="checkbox" id="catchai" name="catchai" onchange="getCatchai()">
+    <label for="catchai">I'm not a 🤖</label>
+  </div>
+  <div id="board">
+    <div id="instructions"></div>
+    <canvas id="canvas" height="112" width="112"></canvas>
+    <button onclick="sendCatchai()"> Send 🛩️</button>  
+  </div>
+  <script>
+    window.addEventListener('load', () => {
+      document.addEventListener('mousedown', startPainting);
+      document.addEventListener('mousemove', sketch);
+      document.addEventListener('mouseup', stopPainting);
+      document.addEventListener('touchstart', e => normalizeTouch(e, startPainting));
+      document.addEventListener('touchmove', e => normalizeTouch(e, sketch));
+      document.addEventListener('touchend', stopPainting);
+    });
+
+    const SERVER = 'http://localhost:3000';
+    const instructionsMessage = (toPredict) => `Draw a ${toPredict}`;
+    let toPredict = '';
+    const canvas = document.querySelector('#canvas');
+    const ctx = canvas.getContext('2d');
+    let coord = { x: 0, y: 0 };
+    let paint = false;
+
+    function normalizeTouch(event, f) {
+      clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
+      f({ clientX, clientY });
+    }
+
+    function getPosition(event) {
+      coord.x = event.clientX - canvas.offsetLeft;
+      coord.y = event.clientY - canvas.offsetTop;
+    }
+
+    function startPainting(event) {
+      paint = true;
+      getPosition(event);
+    }
+
+    function stopPainting() {
+      paint = false;
+    }
+
+    function sketch(event) {
+      if (!paint) return;
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#a9a9a9';
+      ctx.moveTo(coord.x, coord.y);
+      getPosition(event);
+      ctx.lineTo(coord.x, coord.y);
+      ctx.stroke();
+    }
+
+    function grayscale() {
+      const img_data = ctx.getImageData(0, 0, 112, 112);
+      let data = img_data.data;
+      for (let i=0; i<data.length; i+=4) {
+        const brightness = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        data[i] = brightness;
+        data[i+1] = brightness;
+        data[i+2] = brightness;
+      }
+
+      ctx.putImageData(img_data, 0, 0);
+    }
+
+    async function getCatchai() {
+        const catchai = document.getElementById('catchai');
+        const board = document.getElementById('board');
+
+        if (catchai.checked) {
+          let response = await fetch(`${SERVER}/catchai`);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (response.ok) {
+            toPredict = await response.json();
+            const instructions = document.getElementById('instructions');
+            instructions.innerHTML = instructionsMessage(toPredict);
+            board.style.display= "flex";
+          }
+        } else {
+          board.style.display= "none";
+        }
+    }
+
+    async function sendCatchai() {
+      grayscale()
+      let response = await fetch(`${SERVER}/catchai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=utf-8'
+        },
+        body: JSON.stringify({
+          animal: toPredict,
+          canvas: canvas.toDataURL()
+        })
+      });
+      let result = await response.json();
+      const {catchai, drawed} = result;
+      const captcha = document.getElementById("captcha"); 
+      if(catchai === drawed) {
+        captcha.style.borderColor = '#00ff00';
+      } else {
+        captcha.style.borderColor = '#ff0000';
+        document.getElementById("captcha");
+        await getCatchai();
+      }
+    }
+  </script>
+</div>
